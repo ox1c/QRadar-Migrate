@@ -26,10 +26,7 @@
             "type": "Microsoft.Resources/resourceGroups",
             "apiVersion": "2021-04-01",
             "name": "[variables('resourceGroupName')]",
-            "location": "[parameters('location')]",
-            "tags": {
-                "Environment": "Production"
-            }
+            "location": "[parameters('location')]"
         },
         {
             "type": "Microsoft.OperationalInsights/workspaces",
@@ -44,76 +41,42 @@
                     "location": "[parameters('location')]",
                     "properties": {
                         "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-                    },
-                    "dependsOn": [
-                        "[variables('workspaceName')]"
-                    ]
+                    }
+                },
+                // Data Connectors nested under workspace
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                    "apiVersion": "2022-07-01-preview",
+                    "name": "[concat(variables('workspaceName'), '/Microsoft.SecurityInsights/CiscoASA')]",
+                    "kind": "CiscoASA",
+                    "properties": {}
+                },
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                    "apiVersion": "2022-07-01-preview",
+                    "name": "[concat(variables('workspaceName'), '/Microsoft.SecurityInsights/MDTI')]",
+                    "kind": "MicrosoftDefenderThreatIntelligence",
+                    "properties": {
+                        "tenantId": "[subscription().tenantId]"
+                    }
+                },
+                // Threat Intelligence - TAXII
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                    "apiVersion": "2022-07-01-preview",
+                    "name": "[concat(variables('workspaceName'), '/Microsoft.SecurityInsights/TAXIIConnector')]",
+                    "kind": "ThreatIntelligenceTaxii",
+                    "properties": {
+                        "friendlyName": "OTX-Default",
+                        "taxiiServer": "https://otx.alienvault.com/taxii/root/",
+                        "collectionId": "User_AlienVault",
+                        "pollingFrequency": "OnceAnHour",
+                        "importIndicators": true
+                    }
                 }
             ],
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
-            ]
-        },
-        {
-            "type": "Microsoft.SecurityInsights/dataConnectors",
-            "apiVersion": "2021-10-01-preview",
-            "name": "[concat(variables('workspaceName'), '/', 'CiscoASA')]",
-            "kind": "CiscoASA",
-            "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-            ]
-        },
-        // Repeat similar blocks for other data connectors
-        // Microsoft Defender Threat Intelligence
-        {
-            "type": "Microsoft.SecurityInsights/dataConnectors",
-            "apiVersion": "2021-10-01-preview",
-            "name": "[concat(variables('workspaceName'), '/', 'MDTI')]",
-            "kind": "MicrosoftDefenderThreatIntelligence",
-            "properties": {
-                "tenantId": "[subscription().tenantId]"
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-            ]
-        },
-        // Threat Intelligence - TAXII with custom config
-        {
-            "type": "Microsoft.SecurityInsights/dataConnectors",
-            "apiVersion": "2021-10-01-preview",
-            "name": "[concat(variables('workspaceName'), '/', 'TAXIIConnector')]",
-            "kind": "ThreatIntelligenceTaxii",
-            "properties": {
-                "friendlyName": "OTX-Default",
-                "taxiiServer": "https://otx.alienvault.com/taxii/root/",
-                "collectionId": "User_AlienVault",
-                "pollingFrequency": "OnceAnHour",
-                "importIndicators": true
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-            ]
-        },
-        // Sample Analytics Rule (Security Events Detection)
-        {
-            "type": "Microsoft.SecurityInsights/alertRules",
-            "apiVersion": "2022-01-01-preview",
-            "name": "[concat(variables('workspaceName'), '/', 'SuspiciousAccountCreation')]",
-            "kind": "Scheduled",
-            "properties": {
-                "displayName": "Suspicious Account Creation",
-                "enabled": true,
-                "query": "SecurityEvent | where EventID == 4720",
-                "queryFrequency": "PT1H",
-                "queryPeriod": "PT2H",
-                "severity": "Medium",
-                "suppressionDuration": "PT1H",
-                "suppressionEnabled": false,
-                "triggerOperator": "GreaterThan",
-                "triggerThreshold": 0
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
             ]
         }
     ]
