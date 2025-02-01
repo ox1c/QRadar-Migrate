@@ -1,0 +1,120 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "customerName": {
+            "type": "string",
+            "metadata": {
+                "description": "Customer name for resource naming"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "UK South",
+            "metadata": {
+                "description": "Azure region for deployment"
+            }
+        }
+    },
+    "variables": {
+        "resourceGroupName": "[concat('TTUK-Sent-', parameters('customerName'))]",
+        "workspaceName": "[concat('TTUK-Sent-', parameters('customerName'), '-LAW')]",
+        "sentinelName": "[concat('TTUK-Sent-', parameters('customerName'), '-Sentinel')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2021-04-01",
+            "name": "[variables('resourceGroupName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "Environment": "Production"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2021-06-01",
+            "name": "[variables('workspaceName')]",
+            "location": "[parameters('location')]",
+            "resources": [
+                {
+                    "type": "Microsoft.SecurityInsights/solutions",
+                    "apiVersion": "2021-03-01-preview",
+                    "name": "[concat('SecurityInsights', '(', variables('workspaceName'), ')')]",
+                    "location": "[parameters('location')]",
+                    "properties": {
+                        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+                    },
+                    "dependsOn": [
+                        "[variables('workspaceName')]"
+                    ]
+                }
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.SecurityInsights/dataConnectors",
+            "apiVersion": "2021-10-01-preview",
+            "name": "[concat(variables('workspaceName'), '/', 'CiscoASA')]",
+            "kind": "CiscoASA",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            ]
+        },
+        // Repeat similar blocks for other data connectors
+        // Microsoft Defender Threat Intelligence
+        {
+            "type": "Microsoft.SecurityInsights/dataConnectors",
+            "apiVersion": "2021-10-01-preview",
+            "name": "[concat(variables('workspaceName'), '/', 'MDTI')]",
+            "kind": "MicrosoftDefenderThreatIntelligence",
+            "properties": {
+                "tenantId": "[subscription().tenantId]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            ]
+        },
+        // Threat Intelligence - TAXII with custom config
+        {
+            "type": "Microsoft.SecurityInsights/dataConnectors",
+            "apiVersion": "2021-10-01-preview",
+            "name": "[concat(variables('workspaceName'), '/', 'TAXIIConnector')]",
+            "kind": "ThreatIntelligenceTaxii",
+            "properties": {
+                "friendlyName": "OTX-Default",
+                "taxiiServer": "https://otx.alienvault.com/taxii/root/",
+                "collectionId": "User_AlienVault",
+                "pollingFrequency": "OnceAnHour",
+                "importIndicators": true
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            ]
+        },
+        // Sample Analytics Rule (Security Events Detection)
+        {
+            "type": "Microsoft.SecurityInsights/alertRules",
+            "apiVersion": "2022-01-01-preview",
+            "name": "[concat(variables('workspaceName'), '/', 'SuspiciousAccountCreation')]",
+            "kind": "Scheduled",
+            "properties": {
+                "displayName": "Suspicious Account Creation",
+                "enabled": true,
+                "query": "SecurityEvent | where EventID == 4720",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT2H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            ]
+        }
+    ]
+}
